@@ -1,0 +1,19 @@
+[project]
+name = "s2d"
+version = "0.1.0"
+description = "Migrate Spotify Liked Songs to Deezer Favourite Tracks, preserving date-added order"
+requires-python = ">=3.12"
+dependencies = [
+    "playwright>=1.47",
+    "python-dotenv>=1.0",
+]
+
+[project.scripts]
+s2d = "s2d.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/s2d"]

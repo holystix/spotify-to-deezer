@@ -1,0 +1,80 @@
+# s2d
+
+Migrates Spotify Liked Songs to Deezer Favourite Tracks so that Deezer's
+"Recently added" sort reproduces Spotify's date-added order.
+
+Deezer stamps a favourite with the time it was added, so the tool favourites
+one track at a time, oldest like first, a few seconds apart. Any failure stops
+the run; the next run resumes from the same row. Everything about your library
+stays in the gitignored `data/` directory.
+
+## Requirements
+
+- Python 3.12 and [uv](https://docs.astral.sh/uv/)
+- Google Chrome (the tool drives your own Chrome with a dedicated profile)
+- A public Deezer profile, so favourites can be read back without an API key
+- An export of your Liked Songs from [exportify.app](https://exportify.app),
+  which includes ISRC codes. Exports from exportify.net also work but match
+  less reliably.
+
+## Setup
+
+```sh
+uv sync
+uv run playwright install chrome   # only if Chrome is not already installed
+cp .env.example .env               # set DEEZER_USER_ID and DEEZER_COUNTRY
+uv run s2d login                   # log in to Deezer once in the window that opens
+```
+
+## Workflow
+
+```sh
+uv run s2d import data/export/liked.csv   # order by Added At, store in data/state.sqlite
+uv run s2d resolve                        # ISRC lookup, then search
+uv run s2d review                         # writes data/reports/review.csv
+```
+
+Decide each row in `review.csv` by adding a line to `data/overrides.csv`
+with `source_uri`, a Deezer track id or URL or `SKIP`, and a note. Then run
+`resolve` again. Tracks that map to the same Deezer track are added once.
+
+```sh
+uv run s2d add --dry-run   # show the next batch and anything blocking it
+uv run s2d add             # favourite the batch, then verify
+uv run s2d status
+```
+
+`add` refuses to start while any earlier row is still undecided, because a
+track added out of turn cannot be moved. Do not use the Chrome window or
+favourite anything by hand while a batch runs.
+
+`verify` re-reads the favourites and checks that every recorded add is
+present and in order. `verify --against fresh.csv` diffs a new export against
+the imported one, to catch likes that changed during the migration.
+
+`clear-favourites` empties the target account after writing a backup to
+`data/reports/`.
+
+## Configuration
+
+`.env` (see `.env.example`):
+
+| Variable | Meaning |
+|---|---|
+| `DEEZER_USER_ID` | numeric id of the target account, used to read favourites back |
+| `DEEZER_COUNTRY` | two-letter country used for availability checks |
+| `ADD_DELAY_MIN` / `ADD_DELAY_MAX` | seconds between adds |
+| `BATCH_SIZE` | tracks per `add` run |
+| `MATCH_THRESHOLD` | minimum search score to accept without review |
+| `DURATION_TOLERANCE_MS` | duration difference still scored as a match |
+| `HEADLESS` | run Chrome without a window |
+
+## Limitations
+
+- Tracks Spotify has withdrawn from its catalogue (greyed out in the app) are
+  missing from every Exportify export. Only Spotify's data download lists
+  them, without dates.
+- Deezer offers no developer API registration, so writes go through the
+  logged-in web app. If Deezer changes its web app the `add` step breaks.
+- Only Spotify to Deezer is implemented. The source reader and the Deezer
+  client are separate modules so another pair can be added.

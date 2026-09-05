@@ -1,0 +1,8 @@
+.agents/state/*
+.agents/state/screenshots/
+.claude/settings.local.json
+.env
+data/
+.venv/
+__pycache__/
+*.egg-info/
