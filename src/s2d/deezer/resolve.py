@@ -33,6 +33,8 @@ class Resolver:
     def track(self, track_id: int) -> dict:
         obj = self.state.cached_track(track_id)
         if obj is None:
+            if track_id < 0:
+                raise SystemExit(f"{track_id} is a personal upload the state file does not know; run `s2d uploads`")
             obj = catalog.track(track_id)
             self.state.cache_track(obj)
         return obj
@@ -134,11 +136,26 @@ def apply_overrides(state: State, resolver: Resolver, path: Path) -> int:
         if o.deezer_id is None:
             res = Resolution(o.source_uri, "skip", "override", None, None, None, o.note)
         else:
-            res = Resolution(o.source_uri, "matched", "override", o.deezer_id, None,
+            method = "upload" if o.deezer_id < 0 else "override"
+            res = Resolution(o.source_uri, "matched", method, o.deezer_id, None,
                              summary(resolver.track(o.deezer_id)), o.note)
         state.upsert_resolution(res)
         n += 1
     return n
+
+
+def match_uploads(state: State, uploads: list[dict], tolerance_ms: int) -> list[tuple[dict, tuple | None, float]]:
+    undecided = state.resolved(("unmatched", "needs-review", "skip"))
+    out = []
+    for obj in uploads:
+        cand = match.Candidate(obj["id"], obj["title"], obj["title"], (obj["artist"]["name"],), obj["duration"] * 1000)
+        best, score = None, 0.0
+        for pair in undecided:
+            total = match.score(pair[0], cand, tolerance_ms).total
+            if total > score:
+                best, score = pair, total
+        out.append((obj, best, round(score, 3)))
+    return out
 
 
 def collapse_duplicates(state: State) -> int:

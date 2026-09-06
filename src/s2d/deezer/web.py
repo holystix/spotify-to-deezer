@@ -12,6 +12,19 @@ class GwError(Exception):
     pass
 
 
+def _personal(row: dict) -> dict:
+    """A personal upload in the shape the public API uses, so it caches and summarises like any track."""
+    return {
+        "id": int(row["SNG_ID"]),
+        "title": row["SNG_TITLE"],
+        "duration": int(row["DURATION"]),
+        "artist": {"name": row["ART_NAME"]},
+        "album": {"title": row["ALB_TITLE"]},
+        "link": f"https://www.deezer.com/track/{row['SNG_ID']}",
+        "isrc": row.get("ISRC") or None,
+    }
+
+
 class GwSession:
     def __init__(self, page: Page):
         self.page = page
@@ -32,3 +45,11 @@ class GwSession:
 
     def add_favourites(self, ids: list[int]) -> None:
         self._call("song.addFavorites", {"IDS": [str(i) for i in ids]})
+
+    def personal_songs(self) -> list[dict]:
+        out = []
+        while True:
+            res = self._call("personal_song.getList", {"start": len(out), "nb": 100})
+            out += [_personal(r) for r in res["data"]]
+            if not res["data"] or len(out) >= res["total"]:
+                return out

@@ -12,7 +12,7 @@ import urllib.parse
 
 from . import browser, config, overrides
 from .deezer import catalog, favourites, verify
-from .deezer.resolve import Resolver, apply_overrides, collapse_duplicates
+from .deezer.resolve import Resolver, apply_overrides, collapse_duplicates, match_uploads
 from .deezer.web import GwError, GwSession
 from .sources import exportify
 from .state import State
@@ -113,6 +113,46 @@ def cmd_review(cfg: config.Config, _args) -> int:
                             c.get("link", ""), f"https://www.deezer.com/search/{q}", t.source_uri])
         overrides.ensure(cfg.overrides_path)
         print(f"{len(rows)} rows written to {out}. Record decisions in {cfg.overrides_path} and re-run resolve.")
+    return 0
+
+
+def cmd_uploads(cfg: config.Config, _args) -> int:
+    with State(cfg.state_path) as st:
+        with browser.persistent_context(cfg.browser_profile, headless=cfg.headless, channel=cfg.browser_channel) as ctx:
+            page = ctx.pages[0] if ctx.pages else ctx.new_page()
+            page.goto("https://www.deezer.com/en/")
+            browser.wait_security_check(page)
+            gw = GwSession(page)
+            if cfg.deezer_user_id and gw.user_id != cfg.deezer_user_id:
+                print(f"Logged-in user {gw.user_id} differs from DEEZER_USER_ID {cfg.deezer_user_id}.", file=sys.stderr)
+                return 2
+            uploads = gw.personal_songs()
+        for obj in uploads:
+            st.cache_track(obj)
+        rows = match_uploads(st, uploads, cfg.duration_tolerance_ms)
+
+        cfg.reports_dir.mkdir(parents=True, exist_ok=True)
+        out = cfg.reports_dir / "uploads.csv"
+        with out.open("w", newline="") as f:
+            w = csv.writer(f)
+            w.writerow([*overrides.HEADER, "score", "position", "upload_artist", "upload_title", "upload_album",
+                        "upload_duration_s", "liked_artists", "liked_title", "liked_duration_s", "status"])
+            for obj, pair, score in rows:
+                t, r = pair or (None, None)
+                confident = t is not None and score >= cfg.match_threshold
+                w.writerow([t.source_uri if confident else "", obj["id"],
+                            f"upload of {obj['artist']['name']} - {obj['title']}" if confident else "",
+                            score, t.position if t else "", obj["artist"]["name"], obj["title"],
+                            obj["album"]["title"], obj["duration"],
+                            "; ".join(t.artists) if t else "", t.title if t else "",
+                            round(t.duration_ms / 1000) if t and t.duration_ms else "", r.status if r else ""])
+        overrides.ensure(cfg.overrides_path)
+        print(f"{len(uploads)} uploaded MP3s on account {gw.user_id}, written to {out}.")
+        for obj, pair, score in rows:
+            where = f"[{pair[0].position}] {_label(pair[0])}" if pair else "no undecided row resembles it"
+            print(f"  {obj['id']} {obj['artist']['name']} - {obj['title']} ({obj['duration']}s) "
+                  f"-> {score:.2f} {where}")
+        print(f"Copy the first three columns of each row you agree with into {cfg.overrides_path}, then run resolve.")
     return 0
 
 
@@ -282,6 +322,7 @@ def main(argv=None) -> int:
     res.add_argument("--retry", action="store_true", help="also re-resolve unmatched and needs-review rows")
     res.add_argument("--limit", type=int, default=0)
     sub.add_parser("review", help="write unmatched and needs-review rows to data/reports/review.csv")
+    sub.add_parser("uploads", help="list the MP3s uploaded to Deezer and match them against undecided rows")
     add = sub.add_parser("add", help="favourite the next batch of matched tracks on Deezer, in position order")
     add.add_argument("--batch", type=int, default=0, help="tracks in this run; defaults to BATCH_SIZE")
     add.add_argument("--allow-existing", action="store_true", help="tolerate favourites this tool did not add")
@@ -301,6 +342,7 @@ def main(argv=None) -> int:
         "import": cmd_import,
         "resolve": cmd_resolve,
         "review": cmd_review,
+        "uploads": cmd_uploads,
         "add": cmd_add,
         "verify": cmd_verify,
         "status": cmd_status,

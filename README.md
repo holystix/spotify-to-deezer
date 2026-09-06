@@ -38,6 +38,20 @@ Decide each row in `review.csv` by adding a line to `data/overrides.csv`
 with `source_uri`, a Deezer track id or URL or `SKIP`, and a note. Then run
 `resolve` again. Tracks that map to the same Deezer track are added once.
 
+For a track Deezer no longer carries, upload your own MP3 under Library →
+MP3s in the web app and run:
+
+```sh
+uv run s2d uploads                        # writes data/reports/uploads.csv
+```
+
+Every upload is scored against the rows still awaiting a decision, and the
+first three columns of each row are an `overrides.csv` line ready to paste.
+An upload's Deezer id is negative and the public API cannot read it, so
+`uploads` is the only thing that can supply its title, artist and duration:
+run it before `resolve`. From there favourites, `time_add` order and `verify`
+treat it as any other track.
+
 ```sh
 uv run s2d add --dry-run   # show the next batch and anything blocking it
 uv run s2d add             # favourite the batch, then verify

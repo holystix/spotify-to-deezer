@@ -26,7 +26,7 @@ def read(path: Path) -> list[Override]:
             if raw.upper() == "SKIP":
                 deezer_id = None
             else:
-                m = re.search(r"track/(\d+)", raw) or re.fullmatch(r"\d+", raw)
+                m = re.search(r"track/(-?\d+)", raw) or re.fullmatch(r"-?\d+", raw)
                 if not uri or not m:
                     raise ValueError(f"{path}:{n}: need a source_uri and a Deezer track id, URL or SKIP")
                 deezer_id = int(m.group(1) if m.lastindex else m.group(0))
