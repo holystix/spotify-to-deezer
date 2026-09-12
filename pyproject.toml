@@ -29,6 +29,7 @@ dev = [
 
 [tool.ruff]
 line-length = 120
+src = ["src", "tests"]
 target-version = "py312"
 
 [tool.ruff.lint]
