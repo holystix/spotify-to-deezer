@@ -7,9 +7,14 @@ exists; update its "Where things stand" section when you change the plan.
 
 ## Working here
 
-- Python 3.12 with `uv`. Run everything as `uv run s2d <command>`; there is
-  no test suite. Exercise a change against a copy of the state:
-  `DATA_DIR=/tmp/x` with `data/state.sqlite` copied into it.
+- Python 3.12 with `uv`. Run everything as `uv run s2d <command>`.
+- Checks: `uv run ruff check`, `uv run ruff format --check`,
+  `uv run basedpyright`, `uv run pytest`. `uv run pre-commit run --all-files`
+  runs all four; `uv run pre-commit install` once makes them the commit hook.
+- Tests use inline synthetic data only, never rows from `data/`, and must not
+  reach the network or Playwright; an autouse fixture fails any that do.
+  Browser and gw writes stay untested: exercise those against a copy of the
+  state, `DATA_DIR=/tmp/x` with `data/state.sqlite` copied into it.
 - The repository is public. Never commit anything from `data/`, `.env`, or
   `.agents/state/`, and keep account IDs, country and track lists out of
   README, commit messages and code.

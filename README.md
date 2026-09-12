@@ -97,6 +97,19 @@ the imported one, to catch likes that changed during the migration.
 | `DURATION_TOLERANCE_MS` | duration difference still scored as a match |
 | `HEADLESS` | run Chrome without a window |
 
+## Development
+
+```sh
+uv sync                                   # installs the dev tools too
+uv run pre-commit install                 # once; runs the checks below on commit
+uv run ruff check && uv run ruff format --check
+uv run basedpyright
+uv run pytest --cov
+```
+
+Tests run against a temporary state file with synthetic data and never open
+a browser or call Deezer.
+
 ## Limitations
 
 - Tracks Spotify has withdrawn from its catalogue (greyed out in the app) are
