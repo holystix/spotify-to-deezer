@@ -37,7 +37,8 @@ def test_sync_creates_file_and_keeps_filled_dates(tmp_path):
 
     rows[0]["added_at"] = "2020-01-02"
     with path.open("w", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=list(placements.HEADER))
+        fields: list[str] = list(placements.HEADER)
+        w = csv.DictWriter(f, fieldnames=fields)
         w.writeheader()
         w.writerows(rows)
 

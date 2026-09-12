@@ -201,3 +201,6 @@ class FakePage:
 
     def content(self) -> str:
         return ""
+
+    def goto(self, url: str) -> None:
+        self.url = url
