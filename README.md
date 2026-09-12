@@ -52,6 +52,20 @@ An upload's Deezer id is negative and the public API cannot read it, so
 run it before `resolve`. From there favourites, `time_add` order and `verify`
 treat it as any other track.
 
+Liked local files never appear in an Exportify export. Spotify's "Download
+your data" archive lists them in `YourLibrary.json`, without dates:
+
+```sh
+uv run s2d reconcile path/to/YourLibrary.json   # writes data/reconcile.csv
+```
+
+Fill the `added_at` column from the Spotify app (Liked Songs sorted by Date
+added): a date places the track last within that day, a full
+`YYYY-MM-DDTHH:MM:SSZ` places it exactly, `SKIP` leaves it out. Re-run to see
+where each lands between its neighbours, then `reconcile --apply` to insert
+them and `resolve` to match them by search. Positions are renumbered, so do
+this before the first `add`, or run `clear-favourites --yes` and start over.
+
 ```sh
 uv run s2d add --dry-run   # show the next batch and anything blocking it
 uv run s2d add             # favourite the batch, then verify

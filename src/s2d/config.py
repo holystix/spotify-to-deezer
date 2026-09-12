@@ -38,6 +38,10 @@ class Config:
     def overrides_path(self) -> Path:
         return self.data_dir / "overrides.csv"
 
+    @property
+    def placements_path(self) -> Path:
+        return self.data_dir / "reconcile.csv"
+
 
 def load() -> Config:
     load_dotenv()

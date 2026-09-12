@@ -10,11 +10,11 @@ from pathlib import Path
 
 import urllib.parse
 
-from . import browser, config, overrides
+from . import browser, config, overrides, placements
 from .deezer import catalog, favourites, verify
 from .deezer.resolve import Resolver, apply_overrides, collapse_duplicates, match_uploads
 from .deezer.web import GwError, GwSession
-from .sources import exportify
+from .sources import exportify, spotify_export
 from .state import State
 
 
@@ -41,6 +41,10 @@ def cmd_import(cfg: config.Config, args) -> int:
             return 0
         if st.count("adds"):
             print(f"Refusing to replace imported tracks: {st.count('adds')} adds are recorded.", file=sys.stderr)
+            return 1
+        if st.get_meta("reconcile_file"):
+            print(f"Refusing to replace imported tracks: local files from {st.get_meta('reconcile_file')} "
+                  "were merged in by reconcile and would be lost.", file=sys.stderr)
             return 1
         st.replace_tracks(tracks)
         st.set_meta("import_sha256", digest)
@@ -113,6 +117,58 @@ def cmd_review(cfg: config.Config, _args) -> int:
                             c.get("link", ""), f"https://www.deezer.com/search/{q}", t.source_uri])
         overrides.ensure(cfg.overrides_path)
         print(f"{len(rows)} rows written to {out}. Record decisions in {cfg.overrides_path} and re-run resolve.")
+    return 0
+
+
+def cmd_reconcile(cfg: config.Config, args) -> int:
+    path = Path(args.library)
+    items = spotify_export.read(path)
+    uris = {i.uri for i in items}
+    with State(cfg.state_path) as st:
+        known = {t.source_uri: t for t in st.tracks()}
+        missing = [i for i in items if i.uri not in known]
+        gone = [t for u, t in known.items() if u not in uris]
+        print(f"{path.name}: {len(items)} liked tracks, {len(missing)} not imported "
+              f"({sum(i.is_local for i in missing)} local files), {len(gone)} imported but no longer liked.")
+        for t in gone:
+            print(f"  - [{t.position}] {_label(t)}")
+        rows = placements.sync(cfg.placements_path, missing)
+        if not rows:
+            print("Nothing to reconcile.")
+            return 0
+        pending = [p for p in rows if p.added_at is None and not p.skip]
+        if pending:
+            print(f"{len(pending)} of {len(rows)} rows in {cfg.placements_path} need an added_at: "
+                  "YYYY-MM-DD (sorts last within that day), a full YYYY-MM-DDTHH:MM:SSZ, or SKIP.")
+            for p in pending:
+                print(f"  {_label(p.item)}")
+            return 1
+        placed = [p for p in rows if not p.skip]
+        if not placed:
+            print(f"All {len(rows)} remaining rows are SKIP.")
+            return 0
+        merged, inserted = placements.merge(list(known.values()), placed)
+        print(f"{len(placed)} tracks to insert, {len(rows) - len(placed)} skipped:")
+        for t in inserted:
+            older = merged[t.position - 1] if t.position else None
+            newer = merged[t.position + 1] if t.position + 1 < len(merged) else None
+            print(f"  [{t.position}] {t.added_at} {_label(t)}")
+            print(f"        after  {older.added_at if older else '-'} {_label(older) if older else 'start of list'}")
+            print(f"        before {newer.added_at if newer else '-'} {_label(newer) if newer else 'end of list'}")
+        if not args.apply:
+            print("Re-run with --apply to insert them and renumber positions.")
+            return 0
+        if st.count("adds"):
+            print(f"Refusing: {st.count('adds')} adds are recorded and would shift. "
+                  "Run clear-favourites --yes first; add then starts over from position 0.", file=sys.stderr)
+            return 1
+        st.replace_tracks(merged)
+        st.set_meta("reconcile_file", path.name)
+        st.set_meta("reconcile_at", datetime.now().isoformat(timespec="seconds"))
+        st.reset_duplicates()
+        collapse_duplicates(st)
+        placements.sync(cfg.placements_path, [p.item for p in rows if p.skip])
+        print(f"Inserted {len(inserted)} tracks; {len(merged)} positions renumbered. Run resolve.")
     return 0
 
 
@@ -308,7 +364,13 @@ def cmd_clear_favourites(cfg: config.Config, args) -> int:
     time.sleep(2)
     total = catalog.favourites_total(cfg.deezer_user_id)
     print(f"Public API now reports {total} favourites.")
-    return 0 if total == 0 else 1
+    if total:
+        return 1
+    with State(cfg.state_path) as st:
+        forgotten = st.clear_adds()
+    if forgotten:
+        print(f"{forgotten} recorded adds forgotten; add starts over from position 0.")
+    return 0
 
 
 def main(argv=None) -> int:
@@ -322,6 +384,9 @@ def main(argv=None) -> int:
     res.add_argument("--retry", action="store_true", help="also re-resolve unmatched and needs-review rows")
     res.add_argument("--limit", type=int, default=0)
     sub.add_parser("review", help="write unmatched and needs-review rows to data/reports/review.csv")
+    rec = sub.add_parser("reconcile", help="merge liked local files from a Spotify data export (YourLibrary.json)")
+    rec.add_argument("library", help="path to YourLibrary.json from Spotify's Download your data")
+    rec.add_argument("--apply", action="store_true", help="insert the placed tracks and renumber positions")
     sub.add_parser("uploads", help="list the MP3s uploaded to Deezer and match them against undecided rows")
     add = sub.add_parser("add", help="favourite the next batch of matched tracks on Deezer, in position order")
     add.add_argument("--batch", type=int, default=0, help="tracks in this run; defaults to BATCH_SIZE")
@@ -342,6 +407,7 @@ def main(argv=None) -> int:
         "import": cmd_import,
         "resolve": cmd_resolve,
         "review": cmd_review,
+        "reconcile": cmd_reconcile,
         "uploads": cmd_uploads,
         "add": cmd_add,
         "verify": cmd_verify,

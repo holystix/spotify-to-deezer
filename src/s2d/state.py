@@ -153,6 +153,14 @@ class State:
         with self.db:
             self.db.execute("INSERT INTO adds VALUES (?, ?, ?, ?)", (position, deezer_id, batch, added_at))
 
+    def clear_adds(self) -> int:
+        with self.db:
+            return self.db.execute("DELETE FROM adds").rowcount
+
+    def reset_duplicates(self) -> None:
+        with self.db:
+            self.db.execute("UPDATE resolutions SET status = 'matched', note = NULL WHERE status = 'dup-skip'")
+
     def next_batch(self) -> int:
         return self.db.execute("SELECT COALESCE(MAX(batch), 0) + 1 FROM adds").fetchone()[0]
 
