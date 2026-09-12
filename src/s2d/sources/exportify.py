@@ -25,7 +25,7 @@ class Export:
 def read(path: Path) -> Export:
     with path.open(newline="", encoding="utf-8-sig") as f:
         reader = csv.DictReader(f)
-        fields = reader.fieldnames or []
+        fields = list(reader.fieldnames or [])
         variant = _detect(fields)
         parsed = [_parse(variant, n, row) for n, row in enumerate(reader, start=2)]
     # Exportify emits newest first, so equal timestamps keep file order reversed;
@@ -50,13 +50,13 @@ def _parse(variant: str, line: int, row: dict) -> dict:
     if added and not ADDED_AT.match(added):
         raise ValueError(f"line {line}: unexpected Added At {added!r}")
     duration = row[DURATION[variant]].strip()
-    return dict(
-        source_uri=uri,
-        title=row["Track Name"].strip(),
-        artists=tuple(a.strip() for a in SPLIT[variant](row["Artist Name(s)"]) if a.strip()),
-        album=row["Album Name"].strip(),
-        duration_ms=int(duration) if duration else None,
-        added_at=added if added and not added.startswith("1970") else None,
-        isrc=(row.get("ISRC") or "").strip() or None,
-        is_local=uri.startswith("spotify:local:"),
-    )
+    return {
+        "source_uri": uri,
+        "title": row["Track Name"].strip(),
+        "artists": tuple(a.strip() for a in SPLIT[variant](row["Artist Name(s)"]) if a.strip()),
+        "album": row["Album Name"].strip(),
+        "duration_ms": int(duration) if duration else None,
+        "added_at": added if added and not added.startswith("1970") else None,
+        "isrc": (row.get("ISRC") or "").strip() or None,
+        "is_local": uri.startswith("spotify:local:"),
+    }

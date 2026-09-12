@@ -13,23 +13,25 @@ from . import browser, config, overrides, placements
 from .deezer import catalog, favourites, verify
 from .deezer.resolve import Resolver, apply_overrides, collapse_duplicates, match_uploads
 from .deezer.web import GwError, GwSession
+from .model import Track
 from .sources import exportify, spotify_export
+from .sources.spotify_export import Item
 from .state import State
 
 
-def cmd_login(cfg: config.Config, _args) -> int:
+def cmd_login(cfg: config.Config, _args: argparse.Namespace) -> int:
     ok = browser.login(cfg.browser_profile, cfg.browser_channel)
     print("Logged in." if ok else "No Deezer session cookie found; log in again.")
     return 0 if ok else 1
 
 
-def cmd_whoami(cfg: config.Config, _args) -> int:
+def cmd_whoami(cfg: config.Config, _args: argparse.Namespace) -> int:
     ok = browser.has_session(cfg.browser_profile, cfg.browser_channel)
     print("Session present." if ok else "Not logged in.")
     return 0 if ok else 1
 
 
-def cmd_import(cfg: config.Config, args) -> int:
+def cmd_import(cfg: config.Config, args: argparse.Namespace) -> int:
     path = _export_file(cfg, args.csv)
     digest = hashlib.sha256(path.read_bytes()).hexdigest()
     export = exportify.read(path)
@@ -76,7 +78,7 @@ def _export_file(cfg: config.Config, arg: str | None) -> Path:
     return files[0]
 
 
-def cmd_resolve(cfg: config.Config, args) -> int:
+def cmd_resolve(cfg: config.Config, args: argparse.Namespace) -> int:
     with State(cfg.state_path) as st:
         if not st.count("tracks"):
             print("Nothing imported.")
@@ -104,7 +106,7 @@ def cmd_resolve(cfg: config.Config, args) -> int:
     return 0
 
 
-def cmd_review(cfg: config.Config, _args) -> int:
+def cmd_review(cfg: config.Config, _args: argparse.Namespace) -> int:
     with State(cfg.state_path) as st:
         rows = st.resolved(("unmatched", "needs-review"))
         cfg.reports_dir.mkdir(parents=True, exist_ok=True)
@@ -157,7 +159,7 @@ def cmd_review(cfg: config.Config, _args) -> int:
     return 0
 
 
-def cmd_reconcile(cfg: config.Config, args) -> int:
+def cmd_reconcile(cfg: config.Config, args: argparse.Namespace) -> int:
     path = Path(args.library)
     items = spotify_export.read(path)
     uris = {i.uri for i in items}
@@ -216,7 +218,7 @@ def cmd_reconcile(cfg: config.Config, args) -> int:
     return 0
 
 
-def cmd_uploads(cfg: config.Config, _args) -> int:
+def cmd_uploads(cfg: config.Config, _args: argparse.Namespace) -> int:
     with State(cfg.state_path) as st:
         with browser.persistent_context(cfg.browser_profile, headless=cfg.headless, channel=cfg.browser_channel) as ctx:
             page = ctx.pages[0] if ctx.pages else ctx.new_page()
@@ -252,12 +254,12 @@ def cmd_uploads(cfg: config.Config, _args) -> int:
             )
             for obj, pair, score in rows:
                 t, r = pair or (None, None)
-                confident = t is not None and score >= cfg.match_threshold
+                uri = t.source_uri if t is not None and score >= cfg.match_threshold else ""
                 w.writerow(
                     [
-                        t.source_uri if confident else "",
+                        uri,
                         obj["id"],
-                        f"upload of {obj['artist']['name']} - {obj['title']}" if confident else "",
+                        f"upload of {obj['artist']['name']} - {obj['title']}" if uri else "",
                         score,
                         t.position if t else "",
                         obj["artist"]["name"],
@@ -279,7 +281,7 @@ def cmd_uploads(cfg: config.Config, _args) -> int:
     return 0
 
 
-def cmd_add(cfg: config.Config, args) -> int:
+def cmd_add(cfg: config.Config, args: argparse.Namespace) -> int:
     if not cfg.deezer_user_id:
         print("DEEZER_USER_ID is not set.", file=sys.stderr)
         return 2
@@ -318,21 +320,21 @@ def cmd_add(cfg: config.Config, args) -> int:
             favourites.add_all(st, gw, cfg.deezer_user_id, rows, batch, cfg.add_delay_min, cfg.add_delay_max, total)
         print(f"Batch {batch} done: {st.count('adds')} added so far, {len(st.pending_adds())} to go.")
         time.sleep(2)
-        return _verify(cfg, st)
+        return _verify(cfg, st, cfg.deezer_user_id)
 
 
-def cmd_verify(cfg: config.Config, args) -> int:
+def cmd_verify(cfg: config.Config, args: argparse.Namespace) -> int:
     with State(cfg.state_path) as st:
         if args.against:
             _diff_export(st, Path(args.against))
         if not cfg.deezer_user_id:
             print("DEEZER_USER_ID is not set.", file=sys.stderr)
             return 2
-        return _verify(cfg, st)
+        return _verify(cfg, st, cfg.deezer_user_id)
 
 
-def _verify(cfg: config.Config, st: State) -> int:
-    report = verify.check(st, cfg.deezer_user_id)
+def _verify(cfg: config.Config, st: State, user_id: str) -> int:
+    report = verify.check(st, user_id)
     cfg.reports_dir.mkdir(parents=True, exist_ok=True)
     out = cfg.reports_dir / f"verify-{datetime.now():%Y%m%d-%H%M%S}.csv"
     verify.write(report, out)
@@ -357,7 +359,7 @@ def _diff_export(st: State, path: Path) -> None:
         print(f"  - [{t.position}] {_label(t)}")
 
 
-def cmd_status(cfg: config.Config, _args) -> int:
+def cmd_status(cfg: config.Config, _args: argparse.Namespace) -> int:
     with State(cfg.state_path) as st:
         name = st.get_meta("import_file")
         if not name:
@@ -377,7 +379,7 @@ def cmd_status(cfg: config.Config, _args) -> int:
     return 0
 
 
-def _label(t) -> str:
+def _label(t: Track | Item) -> str:
     return f"{' / '.join(t.artists)} - {t.title} ({round((t.duration_ms or 0) / 1000)}s)"
 
 
@@ -390,7 +392,7 @@ def _print_counts(st: State) -> None:
     )
 
 
-def cmd_clear_favourites(cfg: config.Config, args) -> int:
+def cmd_clear_favourites(cfg: config.Config, args: argparse.Namespace) -> int:
     if not cfg.deezer_user_id:
         print("DEEZER_USER_ID is not set.", file=sys.stderr)
         return 2
@@ -455,7 +457,7 @@ def cmd_clear_favourites(cfg: config.Config, args) -> int:
     return 0
 
 
-def main(argv=None) -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="s2d")
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("login", help="open a browser window to log in to Deezer once")

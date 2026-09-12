@@ -27,7 +27,7 @@ def _personal(row: dict) -> dict:
 
 
 class GwSession:
-    def __init__(self, page: Page):
+    def __init__(self, page: Page) -> None:
         self.page = page
         data = self._call("deezer.getUserData", {}, token="")
         self.user_id = str(data["USER"]["USER_ID"])
@@ -35,7 +35,7 @@ class GwSession:
         if self.user_id == "0":
             raise GwError("page is not logged in")
 
-    def _call(self, method: str, body: dict, token: str | None = None):
+    def _call(self, method: str, body: dict, token: str | None = None) -> dict:
         res = self.page.evaluate(
             _CALL, {"method": method, "token": self.token if token is None else token, "body": body}
         )

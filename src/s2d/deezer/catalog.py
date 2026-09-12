@@ -20,12 +20,12 @@ class ApiError(Exception):
     pass
 
 
-def get(path: str, **params) -> dict:
+def get(path: str, **params: str | int) -> dict:
     return get_url(_url(path, params))
 
 
-def get_optional(path: str, **params) -> dict | None:
-    return get_url(_url(path, params), allow_missing=True)
+def get_optional(path: str, **params: str | int) -> dict | None:
+    return _fetch(_url(path, params), allow_missing=True)
 
 
 def _url(path: str, params: dict) -> str:
@@ -35,7 +35,14 @@ def _url(path: str, params: dict) -> str:
     return url
 
 
-def get_url(url: str, allow_missing: bool = False) -> dict | None:
+def get_url(url: str) -> dict:
+    data = _fetch(url)
+    if data is None:
+        raise ApiError(f"{url}: no data")
+    return data
+
+
+def _fetch(url: str, allow_missing: bool = False) -> dict | None:
     for attempt in range(6):
         _throttle()
         try:
@@ -67,7 +74,7 @@ def _throttle() -> None:
     _recent.append(time.monotonic())
 
 
-def iter_pages(path: str, **params) -> Iterator[dict]:
+def iter_pages(path: str, **params: str | int) -> Iterator[dict]:
     data = get(path, **params)
     while True:
         yield from data["data"]

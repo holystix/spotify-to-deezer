@@ -26,7 +26,7 @@ def candidate(obj: dict) -> match.Candidate:
 
 
 class Resolver:
-    def __init__(self, state: State, country: str, threshold: float, tolerance_ms: int):
+    def __init__(self, state: State, country: str, threshold: float, tolerance_ms: int) -> None:
         self.state = state
         self.country = country
         self.threshold = threshold
@@ -63,7 +63,7 @@ class Resolver:
                         f"ISRC hit unavailable in {self.country}",
                     )
         res = self._search(t, fallback)
-        if res.status == "matched" and fallback and fallback.status == "needs-review":
+        if res.status == "matched" and fallback and fallback.status == "needs-review" and fallback.candidate:
             return replace(
                 res, note=f"ISRC hit {fallback.candidate['link']} {fallback.note}; matched by search instead"
             )
@@ -127,7 +127,7 @@ class Resolver:
             if not best:
                 return replace(fallback, note=f"{fallback.note}; no search candidates")
             cand, sc = summary(best[0]), best[1]
-            if fallback.status == "unmatched":
+            if fallback.status == "unmatched" and fallback.candidate:
                 return Resolution(
                     t.source_uri,
                     "unmatched",
@@ -189,6 +189,8 @@ def collapse_duplicates(state: State) -> int:
     first: dict[int, int] = {}
     changes = 0
     for t, r in state.resolved(("matched", "dup-skip")):
+        if r.deezer_id is None:
+            continue
         if r.deezer_id not in first:
             first[r.deezer_id] = t.position
             if r.status == "dup-skip":

@@ -2,6 +2,7 @@ import random
 import time
 from datetime import datetime
 
+from ..model import Resolution, Track
 from ..state import State
 from . import catalog
 from .web import GwSession
@@ -20,8 +21,8 @@ def reconcile(state: State, user_id: str, batch: int, allow_existing: bool) -> i
     extra = sorted(set(favs) - recorded)
     pending = state.pending_adds()
     if len(extra) == 1 and pending and pending[0][1].deezer_id == extra[0]:
-        t, r = pending[0]
-        state.record_add(t.position, r.deezer_id, batch, _iso(favs[extra[0]]["time_add"]))
+        t = pending[0][0]
+        state.record_add(t.position, extra[0], batch, _iso(favs[extra[0]]["time_add"]))
         print(f"  adopted position {t.position}: favourited by the previous run but not recorded")
         extra = []
     if extra and not allow_existing:
@@ -32,9 +33,18 @@ def reconcile(state: State, user_id: str, batch: int, allow_existing: bool) -> i
 
 
 def add_all(
-    state: State, gw: GwSession, user_id: str, rows, batch: int, delay_min: float, delay_max: float, total: int
+    state: State,
+    gw: GwSession,
+    user_id: str,
+    rows: list[tuple[Track, Resolution]],
+    batch: int,
+    delay_min: float,
+    delay_max: float,
+    total: int,
 ) -> None:
     for i, (t, r) in enumerate(rows, 1):
+        if r.deezer_id is None or r.candidate is None:
+            raise AddError(f"position {t.position}: matched row has no Deezer track")
         gw.add_favourites([r.deezer_id])
         total = _await_total(user_id, total + 1, t.position)
         state.record_add(t.position, r.deezer_id, batch, datetime.now().isoformat(timespec="seconds"))
