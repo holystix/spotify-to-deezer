@@ -25,13 +25,15 @@ def reconcile(state: State, user_id: str, batch: int, allow_existing: bool) -> i
         print(f"  adopted position {t.position}: favourited by the previous run but not recorded")
         extra = []
     if extra and not allow_existing:
-        raise AddError(f"{len(extra)} favourites are not recorded adds, e.g. {extra[:5]}. "
-                       "Remove them or pass --allow-existing.")
+        raise AddError(
+            f"{len(extra)} favourites are not recorded adds, e.g. {extra[:5]}. Remove them or pass --allow-existing."
+        )
     return len(favs)
 
 
-def add_all(state: State, gw: GwSession, user_id: str, rows, batch: int,
-            delay_min: float, delay_max: float, total: int) -> None:
+def add_all(
+    state: State, gw: GwSession, user_id: str, rows, batch: int, delay_min: float, delay_max: float, total: int
+) -> None:
     for i, (t, r) in enumerate(rows, 1):
         gw.add_favourites([r.deezer_id])
         total = _await_total(user_id, total + 1, t.position)

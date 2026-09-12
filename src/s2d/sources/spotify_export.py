@@ -26,7 +26,7 @@ def read(path: Path) -> list[Item]:
 
 
 def _local(uri: str) -> Item:
-    parts = uri[len(LOCAL):].split(":")
+    parts = uri[len(LOCAL) :].split(":")
     if len(parts) != 4:
         raise ValueError(f"unexpected local file URI {uri!r}")
     artist, album, title, seconds = (unquote_plus(p) for p in parts)

@@ -20,7 +20,9 @@ def summary(obj: dict) -> dict:
 
 def candidate(obj: dict) -> match.Candidate:
     names = tuple(c["name"] for c in obj.get("contributors", [])) or (obj["artist"]["name"],)
-    return match.Candidate(obj["id"], obj["title"], obj.get("title_short") or obj["title"], names, obj["duration"] * 1000)
+    return match.Candidate(
+        obj["id"], obj["title"], obj.get("title_short") or obj["title"], names, obj["duration"] * 1000
+    )
 
 
 class Resolver:
@@ -51,11 +53,20 @@ class Resolver:
                     if fallback.status == "matched":
                         return fallback
                 else:
-                    fallback = Resolution(t.source_uri, "unmatched", None, None, None, summary(hit),
-                                          f"ISRC hit unavailable in {self.country}")
+                    fallback = Resolution(
+                        t.source_uri,
+                        "unmatched",
+                        None,
+                        None,
+                        None,
+                        summary(hit),
+                        f"ISRC hit unavailable in {self.country}",
+                    )
         res = self._search(t, fallback)
         if res.status == "matched" and fallback and fallback.status == "needs-review":
-            return replace(res, note=f"ISRC hit {fallback.candidate['link']} {fallback.note}; matched by search instead")
+            return replace(
+                res, note=f"ISRC hit {fallback.candidate['link']} {fallback.note}; matched by search instead"
+            )
         return res
 
     def _available(self, obj: dict) -> tuple[dict | None, bool]:
@@ -73,8 +84,9 @@ class Resolver:
         cand = summary(obj)
         delta = abs(cand["duration"] * 1000 - t.duration_ms) if t.duration_ms else 0
         if method != "search" and delta > 10_000:
-            return Resolution(t.source_uri, "needs-review", method, cand["id"], score, cand,
-                              f"duration differs by {delta // 1000}s")
+            return Resolution(
+                t.source_uri, "needs-review", method, cand["id"], score, cand, f"duration differs by {delta // 1000}s"
+            )
         return Resolution(t.source_uri, "matched", method, cand["id"], score, cand, None)
 
     def _score(self, t: Track, obj: dict) -> match.Score:
@@ -116,14 +128,28 @@ class Resolver:
                 return replace(fallback, note=f"{fallback.note}; no search candidates")
             cand, sc = summary(best[0]), best[1]
             if fallback.status == "unmatched":
-                return Resolution(t.source_uri, "unmatched", None, None, round(sc.total, 3), cand,
-                                  f"{fallback.note}: {fallback.candidate['link']}; best available scored {sc.total:.2f} ({sc})")
+                return Resolution(
+                    t.source_uri,
+                    "unmatched",
+                    None,
+                    None,
+                    round(sc.total, 3),
+                    cand,
+                    f"{fallback.note}: {fallback.candidate['link']}; best available scored {sc.total:.2f} ({sc})",
+                )
             if cand["id"] != fallback.deezer_id:
                 return replace(fallback, note=f"{fallback.note}; search best {cand['link']} scored {sc.total:.2f}")
             return replace(fallback, note=f"{fallback.note}; search found the same track")
         if best:
-            return Resolution(t.source_uri, "unmatched", None, None, round(best[1].total, 3), summary(best[0]),
-                              f"best candidate scored {best[1].total:.2f} ({best[1]})")
+            return Resolution(
+                t.source_uri,
+                "unmatched",
+                None,
+                None,
+                round(best[1].total, 3),
+                summary(best[0]),
+                f"best candidate scored {best[1].total:.2f} ({best[1]})",
+            )
         return Resolution(t.source_uri, "unmatched", None, None, None, None, "no search results")
 
 
@@ -137,8 +163,9 @@ def apply_overrides(state: State, resolver: Resolver, path: Path) -> int:
             res = Resolution(o.source_uri, "skip", "override", None, None, None, o.note)
         else:
             method = "upload" if o.deezer_id < 0 else "override"
-            res = Resolution(o.source_uri, "matched", method, o.deezer_id, None,
-                             summary(resolver.track(o.deezer_id)), o.note)
+            res = Resolution(
+                o.source_uri, "matched", method, o.deezer_id, None, summary(resolver.track(o.deezer_id)), o.note
+            )
         state.upsert_resolution(res)
         n += 1
     return n

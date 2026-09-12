@@ -35,8 +35,17 @@ def sync(path: Path, missing: list[Item]) -> list[Placement]:
         for i in missing:
             raw = filled.get(i.uri, (0, ""))[1]
             q = urllib.parse.quote(f"{i.artists[0] if i.artists else ''} {i.title}")
-            w.writerow([i.uri, raw, "; ".join(i.artists), i.title, i.album,
-                        round(i.duration_ms / 1000) if i.duration_ms else "", f"https://www.deezer.com/search/{q}"])
+            w.writerow(
+                [
+                    i.uri,
+                    raw,
+                    "; ".join(i.artists),
+                    i.title,
+                    i.album,
+                    round(i.duration_ms / 1000) if i.duration_ms else "",
+                    f"https://www.deezer.com/search/{q}",
+                ]
+            )
     return out
 
 

@@ -1,4 +1,5 @@
 """Calls the web app's own gw-light endpoint from inside a logged-in page."""
+
 from playwright.sync_api import Page
 
 _CALL = """async ({method, token, body}) => {
@@ -35,7 +36,9 @@ class GwSession:
             raise GwError("page is not logged in")
 
     def _call(self, method: str, body: dict, token: str | None = None):
-        res = self.page.evaluate(_CALL, {"method": method, "token": self.token if token is None else token, "body": body})
+        res = self.page.evaluate(
+            _CALL, {"method": method, "token": self.token if token is None else token, "body": body}
+        )
         if res.get("error"):
             raise GwError(f"{method}: {res['error']}")
         return res["results"]

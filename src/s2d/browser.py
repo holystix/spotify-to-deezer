@@ -2,9 +2,11 @@ import time
 from contextlib import contextmanager
 from pathlib import Path
 
-from playwright.sync_api import BrowserContext, Error as PlaywrightError, sync_playwright
+from playwright.sync_api import BrowserContext, sync_playwright
+from playwright.sync_api import Error as PlaywrightError
 
 LOGIN_URL = "https://account.deezer.com/en/login?redirect_uri=https%3A%2F%2Fwww.deezer.com%2Fen%2F"
+
 
 class ProfileInUse(Exception):
     pass
@@ -23,9 +25,7 @@ def persistent_context(profile: Path, headless: bool, channel: str | None):
     profile.mkdir(parents=True, exist_ok=True)
     with sync_playwright() as p:
         try:
-            ctx = p.chromium.launch_persistent_context(
-                str(profile), headless=headless, channel=channel, **LAUNCH_ARGS
-            )
+            ctx = p.chromium.launch_persistent_context(str(profile), headless=headless, channel=channel, **LAUNCH_ARGS)
         except PlaywrightError as e:
             if "ProcessSingleton" in str(e):
                 raise ProfileInUse(profile) from None

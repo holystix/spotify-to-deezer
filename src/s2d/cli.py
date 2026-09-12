@@ -4,11 +4,10 @@ import hashlib
 import json
 import sys
 import time
+import urllib.parse
 from collections import Counter
 from datetime import datetime
 from pathlib import Path
-
-import urllib.parse
 
 from . import browser, config, overrides, placements
 from .deezer import catalog, favourites, verify
@@ -43,8 +42,11 @@ def cmd_import(cfg: config.Config, args) -> int:
             print(f"Refusing to replace imported tracks: {st.count('adds')} adds are recorded.", file=sys.stderr)
             return 1
         if st.get_meta("reconcile_file"):
-            print(f"Refusing to replace imported tracks: local files from {st.get_meta('reconcile_file')} "
-                  "were merged in by reconcile and would be lost.", file=sys.stderr)
+            print(
+                f"Refusing to replace imported tracks: local files from {st.get_meta('reconcile_file')} "
+                "were merged in by reconcile and would be lost.",
+                file=sys.stderr,
+            )
             return 1
         st.replace_tracks(tracks)
         st.set_meta("import_sha256", digest)
@@ -54,8 +56,10 @@ def cmd_import(cfg: config.Config, args) -> int:
     tied = sum(n for n in Counter(t.added_at for t in tracks).values() if n > 1)
     print(f"Imported {len(tracks)} tracks from {path.name} ({export.variant}).")
     print(f"  oldest {tracks[0].added_at}, newest {tracks[-1].added_at}")
-    print(f"  rows in same-second ties: {tied}, local files: {sum(t.is_local for t in tracks)}, "
-          f"without Added At: {sum(t.added_at is None for t in tracks)}")
+    print(
+        f"  rows in same-second ties: {tied}, local files: {sum(t.is_local for t in tracks)}, "
+        f"without Added At: {sum(t.added_at is None for t in tracks)}"
+    )
     if export.has_isrc:
         print(f"  without ISRC: {sum(t.isrc is None for t in tracks)}")
     else:
@@ -79,7 +83,7 @@ def cmd_resolve(cfg: config.Config, args) -> int:
             return 1
         resolver = Resolver(st, cfg.deezer_country, cfg.match_threshold, cfg.duration_tolerance_ms)
         applied = apply_overrides(st, resolver, cfg.overrides_path)
-        pending = st.pending_tracks(retry=args.retry)[:args.limit or None]
+        pending = st.pending_tracks(retry=args.retry)[: args.limit or None]
         print(f"{applied} overrides applied; resolving {len(pending)} tracks.")
         for i, t in enumerate(pending, 1):
             res = resolver.resolve(t)
@@ -87,8 +91,10 @@ def cmd_resolve(cfg: config.Config, args) -> int:
             if res.status != "matched":
                 print(f"  [{t.position}] {res.status}: {_label(t)} | {res.note}")
                 if res.candidate:
-                    print(f"        suggestion: {res.candidate['artist']} - {res.candidate['title']} "
-                          f"({res.candidate['duration']}s) {res.candidate['link']}")
+                    print(
+                        f"        suggestion: {res.candidate['artist']} - {res.candidate['title']} "
+                        f"({res.candidate['duration']}s) {res.candidate['link']}"
+                    )
             if i % 100 == 0:
                 print(f"  {i}/{len(pending)}")
         dups = collapse_duplicates(st)
@@ -105,16 +111,47 @@ def cmd_review(cfg: config.Config, _args) -> int:
         out = cfg.reports_dir / "review.csv"
         with out.open("w", newline="") as f:
             w = csv.writer(f)
-            w.writerow(["position", "added_at", "artists", "title", "duration_s", "isrc", "status", "note",
-                        "suggestion_id", "suggestion_artist", "suggestion_title", "suggestion_duration_s",
-                        "suggestion_link", "search_link", "source_uri"])
+            w.writerow(
+                [
+                    "position",
+                    "added_at",
+                    "artists",
+                    "title",
+                    "duration_s",
+                    "isrc",
+                    "status",
+                    "note",
+                    "suggestion_id",
+                    "suggestion_artist",
+                    "suggestion_title",
+                    "suggestion_duration_s",
+                    "suggestion_link",
+                    "search_link",
+                    "source_uri",
+                ]
+            )
             for t, r in rows:
                 c = r.candidate or {}
                 q = urllib.parse.quote(f"{t.artists[0] if t.artists else ''} {t.title}")
-                w.writerow([t.position, t.added_at, "; ".join(t.artists), t.title,
-                            round(t.duration_ms / 1000) if t.duration_ms else "", t.isrc, r.status, r.note,
-                            c.get("id", ""), c.get("artist", ""), c.get("title", ""), c.get("duration", ""),
-                            c.get("link", ""), f"https://www.deezer.com/search/{q}", t.source_uri])
+                w.writerow(
+                    [
+                        t.position,
+                        t.added_at,
+                        "; ".join(t.artists),
+                        t.title,
+                        round(t.duration_ms / 1000) if t.duration_ms else "",
+                        t.isrc,
+                        r.status,
+                        r.note,
+                        c.get("id", ""),
+                        c.get("artist", ""),
+                        c.get("title", ""),
+                        c.get("duration", ""),
+                        c.get("link", ""),
+                        f"https://www.deezer.com/search/{q}",
+                        t.source_uri,
+                    ]
+                )
         overrides.ensure(cfg.overrides_path)
         print(f"{len(rows)} rows written to {out}. Record decisions in {cfg.overrides_path} and re-run resolve.")
     return 0
@@ -128,8 +165,10 @@ def cmd_reconcile(cfg: config.Config, args) -> int:
         known = {t.source_uri: t for t in st.tracks()}
         missing = [i for i in items if i.uri not in known]
         gone = [t for u, t in known.items() if u not in uris]
-        print(f"{path.name}: {len(items)} liked tracks, {len(missing)} not imported "
-              f"({sum(i.is_local for i in missing)} local files), {len(gone)} imported but no longer liked.")
+        print(
+            f"{path.name}: {len(items)} liked tracks, {len(missing)} not imported "
+            f"({sum(i.is_local for i in missing)} local files), {len(gone)} imported but no longer liked."
+        )
         for t in gone:
             print(f"  - [{t.position}] {_label(t)}")
         rows = placements.sync(cfg.placements_path, missing)
@@ -138,8 +177,10 @@ def cmd_reconcile(cfg: config.Config, args) -> int:
             return 0
         pending = [p for p in rows if p.added_at is None and not p.skip]
         if pending:
-            print(f"{len(pending)} of {len(rows)} rows in {cfg.placements_path} need an added_at: "
-                  "YYYY-MM-DD (sorts last within that day), a full YYYY-MM-DDTHH:MM:SSZ, or SKIP.")
+            print(
+                f"{len(pending)} of {len(rows)} rows in {cfg.placements_path} need an added_at: "
+                "YYYY-MM-DD (sorts last within that day), a full YYYY-MM-DDTHH:MM:SSZ, or SKIP."
+            )
             for p in pending:
                 print(f"  {_label(p.item)}")
             return 1
@@ -159,8 +200,11 @@ def cmd_reconcile(cfg: config.Config, args) -> int:
             print("Re-run with --apply to insert them and renumber positions.")
             return 0
         if st.count("adds"):
-            print(f"Refusing: {st.count('adds')} adds are recorded and would shift. "
-                  "Run clear-favourites --yes first; add then starts over from position 0.", file=sys.stderr)
+            print(
+                f"Refusing: {st.count('adds')} adds are recorded and would shift. "
+                "Run clear-favourites --yes first; add then starts over from position 0.",
+                file=sys.stderr,
+            )
             return 1
         st.replace_tracks(merged)
         st.set_meta("reconcile_file", path.name)
@@ -191,23 +235,46 @@ def cmd_uploads(cfg: config.Config, _args) -> int:
         out = cfg.reports_dir / "uploads.csv"
         with out.open("w", newline="") as f:
             w = csv.writer(f)
-            w.writerow([*overrides.HEADER, "score", "position", "upload_artist", "upload_title", "upload_album",
-                        "upload_duration_s", "liked_artists", "liked_title", "liked_duration_s", "status"])
+            w.writerow(
+                [
+                    *overrides.HEADER,
+                    "score",
+                    "position",
+                    "upload_artist",
+                    "upload_title",
+                    "upload_album",
+                    "upload_duration_s",
+                    "liked_artists",
+                    "liked_title",
+                    "liked_duration_s",
+                    "status",
+                ]
+            )
             for obj, pair, score in rows:
                 t, r = pair or (None, None)
                 confident = t is not None and score >= cfg.match_threshold
-                w.writerow([t.source_uri if confident else "", obj["id"],
-                            f"upload of {obj['artist']['name']} - {obj['title']}" if confident else "",
-                            score, t.position if t else "", obj["artist"]["name"], obj["title"],
-                            obj["album"]["title"], obj["duration"],
-                            "; ".join(t.artists) if t else "", t.title if t else "",
-                            round(t.duration_ms / 1000) if t and t.duration_ms else "", r.status if r else ""])
+                w.writerow(
+                    [
+                        t.source_uri if confident else "",
+                        obj["id"],
+                        f"upload of {obj['artist']['name']} - {obj['title']}" if confident else "",
+                        score,
+                        t.position if t else "",
+                        obj["artist"]["name"],
+                        obj["title"],
+                        obj["album"]["title"],
+                        obj["duration"],
+                        "; ".join(t.artists) if t else "",
+                        t.title if t else "",
+                        round(t.duration_ms / 1000) if t and t.duration_ms else "",
+                        r.status if r else "",
+                    ]
+                )
         overrides.ensure(cfg.overrides_path)
         print(f"{len(uploads)} uploaded MP3s on account {gw.user_id}, written to {out}.")
         for obj, pair, score in rows:
             where = f"[{pair[0].position}] {_label(pair[0])}" if pair else "no undecided row resembles it"
-            print(f"  {obj['id']} {obj['artist']['name']} - {obj['title']} ({obj['duration']}s) "
-                  f"-> {score:.2f} {where}")
+            print(f"  {obj['id']} {obj['artist']['name']} - {obj['title']} ({obj['duration']}s) -> {score:.2f} {where}")
         print(f"Copy the first three columns of each row you agree with into {cfg.overrides_path}, then run resolve.")
     return 0
 
@@ -230,8 +297,10 @@ def cmd_add(cfg: config.Config, args) -> int:
                 print(f"  [{t.position}] {status}: {_label(t)}")
             print("Run review, record decisions in data/overrides.csv, then resolve.")
             return 1
-        print(f"Batch of {len(rows)}: positions {rows[0][0].position}-{rows[-1][0].position}, "
-              f"{len(pending) - len(rows)} remain after it.")
+        print(
+            f"Batch of {len(rows)}: positions {rows[0][0].position}-{rows[-1][0].position}, "
+            f"{len(pending) - len(rows)} remain after it."
+        )
         if args.dry_run:
             return 0
 
@@ -299,10 +368,12 @@ def cmd_status(cfg: config.Config, _args) -> int:
         pending = st.pending_adds()
         print(f"Adds recorded: {st.count('adds')}; {len(pending)} matched rows still to add.")
         if pending:
-            end = pending[:cfg.batch_size][-1][0].position
+            end = pending[: cfg.batch_size][-1][0].position
             blocking = st.blocking(end)
-            print(f"Next batch would cover positions {pending[0][0].position}-{end}; "
-                  f"{len(blocking)} rows up to there still need a decision.")
+            print(
+                f"Next batch would cover positions {pending[0][0].position}-{end}; "
+                f"{len(blocking)} rows up to there still need a decision."
+            )
     return 0
 
 
@@ -313,8 +384,10 @@ def _label(t) -> str:
 def _print_counts(st: State) -> None:
     counts = st.resolution_counts()
     total = sum(n for _, _, n in counts)
-    print(f"Resolved {total}/{st.count('tracks')}: " + ", ".join(
-        f"{status}{'/' + method if method else ''} {n}" for status, method, n in counts))
+    print(
+        f"Resolved {total}/{st.count('tracks')}: "
+        + ", ".join(f"{status}{'/' + method if method else ''} {n}" for status, method, n in counts)
+    )
 
 
 def cmd_clear_favourites(cfg: config.Config, args) -> int:
@@ -331,9 +404,15 @@ def cmd_clear_favourites(cfg: config.Config, args) -> int:
 
     cfg.reports_dir.mkdir(parents=True, exist_ok=True)
     backup = cfg.reports_dir / f"favourites-backup-{datetime.now():%Y%m%d-%H%M%S}.json"
-    backup.write_text(json.dumps(
-        [{k: t.get(k) for k in ("id", "title", "duration", "time_add")} | {"artist": t["artist"]["name"]} for t in favs],
-        indent=1))
+    backup.write_text(
+        json.dumps(
+            [
+                {k: t.get(k) for k in ("id", "title", "duration", "time_add")} | {"artist": t["artist"]["name"]}
+                for t in favs
+            ],
+            indent=1,
+        )
+    )
     print(f"Backup written to {backup}.")
 
     ids = [t["id"] for t in favs]
@@ -350,13 +429,16 @@ def cmd_clear_favourites(cfg: config.Config, args) -> int:
         time.sleep(1.5)
         total = catalog.favourites_total(cfg.deezer_user_id)
         if total != len(ids) - 1:
-            print(f"Probe removal not reflected: public total is {total}, expected {len(ids) - 1}. Stopping.", file=sys.stderr)
+            print(
+                f"Probe removal not reflected: public total is {total}, expected {len(ids) - 1}. Stopping.",
+                file=sys.stderr,
+            )
             return 1
         print("Probe removal confirmed.")
 
         rest = ids[1:]
         for i in range(0, len(rest), args.batch):
-            chunk = rest[i:i + args.batch]
+            chunk = rest[i : i + args.batch]
             gw.remove_favourites(chunk)
             print(f"  removed {1 + i + len(chunk)}/{len(ids)}")
             time.sleep(args.delay)

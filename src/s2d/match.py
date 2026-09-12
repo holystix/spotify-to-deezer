@@ -6,9 +6,29 @@ from difflib import SequenceMatcher
 from .model import Track
 
 VERSION_WORDS = {
-    "live", "remix", "acoustic", "instrumental", "demo", "edit", "mix", "version",
-    "cover", "karaoke", "sped", "slowed", "reprise", "unplugged", "session", "sessions",
-    "dub", "rework", "bootleg", "extended", "radio", "mono", "stereo",
+    "live",
+    "remix",
+    "acoustic",
+    "instrumental",
+    "demo",
+    "edit",
+    "mix",
+    "version",
+    "cover",
+    "karaoke",
+    "sped",
+    "slowed",
+    "reprise",
+    "unplugged",
+    "session",
+    "sessions",
+    "dub",
+    "rework",
+    "bootleg",
+    "extended",
+    "radio",
+    "mono",
+    "stereo",
 }
 # Remasters and "Original Mix" are the standard recording, not a version.
 NEUTRAL = re.compile(r"\b(original mix|album version|(\d{4} )?remaster(ed)?( \d{4})?)\b")

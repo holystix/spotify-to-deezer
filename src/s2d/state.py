@@ -50,13 +50,29 @@ def _now() -> str:
 
 
 def _track(r: sqlite3.Row) -> Track:
-    return Track(r["position"], r["source_uri"], r["title"], tuple(json.loads(r["artists_json"])),
-                 r["album"], r["duration_ms"], r["added_at"], r["isrc"], bool(r["is_local"]))
+    return Track(
+        r["position"],
+        r["source_uri"],
+        r["title"],
+        tuple(json.loads(r["artists_json"])),
+        r["album"],
+        r["duration_ms"],
+        r["added_at"],
+        r["isrc"],
+        bool(r["is_local"]),
+    )
 
 
 def _resolution(r: sqlite3.Row) -> Resolution:
-    return Resolution(r["source_uri"], r["status"], r["method"], r["deezer_id"], r["score"],
-                      json.loads(r["candidate_json"]) if r["candidate_json"] else None, r["note"])
+    return Resolution(
+        r["source_uri"],
+        r["status"],
+        r["method"],
+        r["deezer_id"],
+        r["score"],
+        json.loads(r["candidate_json"]) if r["candidate_json"] else None,
+        r["note"],
+    )
 
 
 class State:
@@ -88,8 +104,21 @@ class State:
             self.db.execute("DELETE FROM tracks")
             self.db.executemany(
                 "INSERT INTO tracks VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                [(t.position, t.source_uri, t.title, json.dumps(list(t.artists)), t.album,
-                  t.duration_ms, t.added_at, t.isrc, int(t.is_local)) for t in tracks])
+                [
+                    (
+                        t.position,
+                        t.source_uri,
+                        t.title,
+                        json.dumps(list(t.artists)),
+                        t.album,
+                        t.duration_ms,
+                        t.added_at,
+                        t.isrc,
+                        int(t.is_local),
+                    )
+                    for t in tracks
+                ],
+            )
 
     def tracks(self) -> list[Track]:
         return [_track(r) for r in self.db.execute("SELECT * FROM tracks ORDER BY position")]
@@ -102,33 +131,47 @@ class State:
         rows = self.db.execute(
             "SELECT t.* FROM tracks t LEFT JOIN resolutions r ON r.source_uri = t.source_uri "
             "WHERE r.source_uri IS NULL OR r.status IN (?, ?) ORDER BY t.position",
-            statuses or ("", ""))
+            statuses or ("", ""),
+        )
         return [_track(r) for r in rows]
 
     def upsert_resolution(self, res: Resolution) -> None:
         with self.db:
             self.db.execute(
                 "INSERT OR REPLACE INTO resolutions VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                (res.source_uri, res.status, res.method, res.deezer_id, res.score,
-                 json.dumps(res.candidate) if res.candidate else None, res.note, _now()))
+                (
+                    res.source_uri,
+                    res.status,
+                    res.method,
+                    res.deezer_id,
+                    res.score,
+                    json.dumps(res.candidate) if res.candidate else None,
+                    res.note,
+                    _now(),
+                ),
+            )
 
     def set_status(self, source_uri: str, status: str, note: str | None) -> None:
         with self.db:
-            self.db.execute("UPDATE resolutions SET status = ?, note = ?, resolved_at = ? WHERE source_uri = ?",
-                            (status, note, _now(), source_uri))
+            self.db.execute(
+                "UPDATE resolutions SET status = ?, note = ?, resolved_at = ? WHERE source_uri = ?",
+                (status, note, _now(), source_uri),
+            )
 
     def resolved(self, statuses: tuple[str, ...] = ()) -> list[tuple[Track, Resolution]]:
         where = f"WHERE r.status IN ({','.join('?' * len(statuses))})" if statuses else ""
         rows = self.db.execute(
             "SELECT t.*, r.status, r.method, r.deezer_id, r.score, r.candidate_json, r.note "
             f"FROM tracks t JOIN resolutions r ON r.source_uri = t.source_uri {where} ORDER BY t.position",
-            statuses)
+            statuses,
+        )
         return [(_track(r), _resolution(r)) for r in rows]
 
     def resolution_counts(self) -> list[tuple[str, str | None, int]]:
         rows = self.db.execute(
             "SELECT r.status, r.method, COUNT(*) FROM resolutions r JOIN tracks t ON t.source_uri = r.source_uri "
-            "GROUP BY r.status, r.method ORDER BY r.status, r.method")
+            "GROUP BY r.status, r.method ORDER BY r.status, r.method"
+        )
         return [tuple(r) for r in rows]
 
     def pending_adds(self) -> list[tuple[Track, Resolution]]:
@@ -136,14 +179,17 @@ class State:
             "SELECT t.*, r.status, r.method, r.deezer_id, r.score, r.candidate_json, r.note "
             "FROM tracks t JOIN resolutions r ON r.source_uri = t.source_uri "
             "LEFT JOIN adds a ON a.position = t.position "
-            "WHERE r.status = 'matched' AND a.position IS NULL ORDER BY t.position")
+            "WHERE r.status = 'matched' AND a.position IS NULL ORDER BY t.position"
+        )
         return [(_track(r), _resolution(r)) for r in rows]
 
     def blocking(self, upto: int) -> list[tuple[Track, str]]:
         rows = self.db.execute(
             "SELECT t.*, r.status FROM tracks t LEFT JOIN resolutions r ON r.source_uri = t.source_uri "
             "WHERE t.position <= ? AND (r.status IS NULL OR r.status IN ('unmatched', 'needs-review')) "
-            "ORDER BY t.position", (upto,))
+            "ORDER BY t.position",
+            (upto,),
+        )
         return [(_track(r), r["status"] or "unresolved") for r in rows]
 
     def adds(self) -> list[sqlite3.Row]:
@@ -170,5 +216,6 @@ class State:
 
     def cache_track(self, obj: dict) -> None:
         with self.db:
-            self.db.execute("INSERT OR REPLACE INTO deezer_tracks VALUES (?, ?, ?)",
-                            (obj["id"], json.dumps(obj), _now()))
+            self.db.execute(
+                "INSERT OR REPLACE INTO deezer_tracks VALUES (?, ?, ?)", (obj["id"], json.dumps(obj), _now())
+            )
